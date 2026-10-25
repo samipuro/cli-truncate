@@ -1,3 +1,4 @@
+import {stripVTControlCharacters} from 'node:util';
 import test from 'ava';
 import stringWidth from 'string-width';
 import cliTruncate from './index.js';
@@ -93,6 +94,39 @@ test('preferTruncationOnSpace option', t => {
 	for (const columns of [2, 3, 4, 5, 6, 7]) {
 		t.true(stringWidth(cliTruncate('unicorns', columns, {position: 'middle', space: true, preferTruncationOnSpace: true})) <= columns, `width <= ${columns}`);
 	}
+});
+
+for (const [position, columns, expected] of [
+	['start', 15, '…are awesome'],
+	['middle', 18, 'unicorns…awesome'],
+	['end', 15, 'unicorns are…'],
+]) {
+	test(`preferTruncationOnSpace ignores ANSI styling at ${position}`, t => {
+		const text = 'unicorns are awesome';
+		const options = {position, preferTruncationOnSpace: true};
+
+		// Styling must preserve the same visible word boundaries as plain text.
+		t.is(cliTruncate(text, columns, options), expected);
+		for (const styledText of [
+			`\u001B[31m${text}\u001B[39m`,
+			`\u001B[1m\u001B[31m${text}\u001B[39m\u001B[22m`,
+			'unicorns \u001B[31mare awesome\u001B[39m',
+		]) {
+			const result = cliTruncate(styledText, columns, options);
+			t.is(stripVTControlCharacters(result), expected);
+			t.true(stringWidth(result) <= columns);
+			t.true(result.includes('\u001B[31m'));
+			t.true(result.includes('\u001B[39m'));
+		}
+	});
+}
+
+test('preferTruncationOnSpace skips adjacent spaces before a styled suffix', t => {
+	const text = '\u001B[31municorns  are awesome\u001B[39m';
+	const result = cliTruncate(text, 15, {position: 'start', preferTruncationOnSpace: true});
+
+	// Skip the full space run without losing the suffix color.
+	t.is(result, '\u001B[31m…are awesome\u001B[39m');
 });
 
 test('truncationCharacter option', t => {

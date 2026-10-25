@@ -1,18 +1,25 @@
+import {stripVTControlCharacters} from 'node:util';
 import sliceAnsi from 'slice-ansi';
 import stringWidth from 'string-width';
 
 const validPositions = new Set(['start', 'middle', 'end']);
 
 function getIndexOfNearestSpace(string, wantedIndex, shouldSearchRight) {
-	if (string.charAt(wantedIndex) === ' ') {
-		return wantedIndex;
-	}
+	// Search visible text so ANSI escape sequences do not shift word boundaries.
+	string = stripVTControlCharacters(string);
 
 	const direction = shouldSearchRight ? 1 : -1;
 
 	for (let index = 0; index <= 3; index++) {
-		const finalIndex = wantedIndex + (index * direction);
+		let finalIndex = wantedIndex + (index * direction);
 		if (string.charAt(finalIndex) === ' ') {
+			// Skip leading spaces before slicing, since ANSI codes can prevent trim() from removing them.
+			if (shouldSearchRight) {
+				while (string.charAt(finalIndex) === ' ') {
+					finalIndex++;
+				}
+			}
+
 			return finalIndex;
 		}
 	}
